@@ -37,10 +37,7 @@ library("Rogue") # Find rogue taxa
 ```
 
 ```{r test-connection, echo = FALSE}
-online <- tryCatch({
-    read.csv("https://raw.githubusercontent.com/ms609/hyoliths/master/MrBayes/hyo.nex.pstat")
-    TRUE
-  },
+online <- tryCatch(RCurl::url.exists("https://raw.githubusercontent.com/"),
   warning = function(w) invokeRestart(""),
   error = function(e) FALSE
 )
@@ -51,62 +48,24 @@ analysis of early brachiopods [@Sun2018] using
 [MrBayes](https://nbisweden.github.io/MrBayes/) [@Hulsenbeck2001].
 Our data files are stored on
 [GitHub](https://github.com/ms609/hyoliths/tree/master/MrBayes).
-Let's load the results of run 1:
+Let's sample 100 trees from the posterior (after discarding a 25% burn-in):
 
 ```{R load-trees}
 if (online) {
-  dataFolder <- "https://raw.githubusercontent.com/ms609/hyoliths/master/MrBayes/"
-  run1.t <- paste0(dataFolder, "hyo.nex.run1.t")
-  # Reading 10k trees takes a second or two...
-  run1Trees <- ape::read.nexus(run1.t)
-  if (packageVersion('ape') <= "5.6.1") {
-    # Workaround for a bug in ape, hopefully fixed in v5.6.2
-    run1Trees <- structure(lapply(run1Trees, function(tr) {
-      tr$tip.label <- attr(run1Trees, 'TipLabel')
-      tr
-    }), class = 'multiPhylo')
-  }
+  # Downloading all trees takes a second or two...
+  trees <- ReadMrBayesTrees(
+    "https://raw.githubusercontent.com/ms609/hyoliths/master/MrBayes/hyo.nex",
+    n = 100,
+    burninFrac = 0.25
+  )
 } else {
   # If no internet connection, we can generate some example trees instead
-  run1Trees <- structure(unlist(lapply(0:21, function(backbone) {
-    AddTipEverywhere(ape::as.phylo(0, nTip = 12), 'ROGUE')
-  }), recursive = FALSE), class = 'multiPhylo')
+  trees <- structure(unlist(lapply(0:21, function(backbone) {
+    AddTipEverywhere(ape::as.phylo(0, nTip = 12), "ROGUE")
+  }), recursive = FALSE), class = "multiPhylo")
 }
 ```
 
-
-## Select trees to analyse
-
-Our tree file contains all trees generated.  We typically want to discard 
-a proportion of trees as burn-in:
-
-```{R discard-burnin}
-burninFrac <- 0.25
-nTrees <- length(run1Trees)
-trees <- run1Trees[seq(from = burninFrac * nTrees, to = nTrees)]
-```
-
-This is a large number of trees to analyse.  We could save time for an initial
-analysis by thinning our sample somewhat.
-
-```{R thin-trees}
-sampleSize <- 100
-trees <- run1Trees[seq(from = burninFrac * nTrees, to = nTrees,
-                       length.out = sampleSize)]
-```
-
-For a full analysis, we ought to consider the output from the other runs of our
-analysis, perhaps with
-
-```r
-nRuns <- 4
-allTrees <- lapply(seq_len(nRuns), function(run) {
-  runTrees <- ape::read.nexus(paste0(dataFolder, 'hyo.nex.run', run, .'t'))
-  runTrees <- runTrees[seq(from = burninFrac * nTrees, to = nTrees,
-                           length.out = sampleSize / nRuns)]
-})
-trees <- structure(unlist(allTrees, recursive = FALSE), class = 'multiPhylo')
-```
 
 ## Initial appraisal
 
@@ -122,7 +81,7 @@ plenary <- Consensus(trees, p = 0.5)
 par(mar = rep(0, 4), cex = 0.85)
 plot(plenary, tip.color = ColByStability(trees))
 PlotTools::SpectrumLegend(
-  "bottomright", legend = c("Stable", "Unstable"),
+  "bottomright", legend = c("Stable", " ", "Unstable"),
   palette = hcl.colors(131, 'inferno')[1:101]
 )
 ```
